@@ -10,6 +10,7 @@ import (
 	"roob.re/refractor/provider/providers"
 	"roob.re/refractor/provider/types"
 	"roob.re/refractor/stats"
+	"time"
 )
 
 type Config struct {
@@ -21,9 +22,20 @@ type Config struct {
 	// above this throughput will never get rotated out of the worker pool, even if they are in the last 2 positions.
 	GoodThroughputMiBs float64 `yaml:"goodThroughputMiBs"`
 
+	// PeekSizeBytes is the amount of bytes to peek before starting to feed the response back to the client.
+	// If PeekSizeBytes are not transferred within PeekTimeout, the request is aborted and requeued to another mirror.
+	PeekSizeMiBs float64 `yaml:"peekSizeMiBs"`
+	// PeekTimeout is the amount of time to give for PeekSizeBytes to be read before switching to another mirror.
+	PeekTimeout time.Duration `yaml:"peekTimeout"`
+
 	// Provider contains the name of the chosen provider, and provider-specific config.
 	Provider map[string]yaml.Node
 }
+
+const (
+	defaultPeekSizeMiBs = 1.0
+	defaultPeekTimeout  = 4 * time.Second
+)
 
 type Server struct {
 	pool     *pool.Pool
@@ -58,11 +70,24 @@ func New(configFile io.Reader) (*Server, error) {
 		break
 	}
 
+	if config.PeekSizeMiBs == 0 {
+		log.Infof("Defaulting PeekSizeMiBs to %.1f", defaultPeekSizeMiBs)
+		config.PeekSizeMiBs = defaultPeekSizeMiBs
+	}
+
+	if config.PeekTimeout == 0 {
+		log.Infof("Defaulting PeekTimeout to %s", defaultPeekTimeout)
+		config.PeekTimeout = defaultPeekTimeout
+	}
+
 	s := &Server{
 		pool: pool.New(pool.Config{
-			Workers: config.Workers,
+			PeekTimeout:   config.PeekTimeout,
+			PeekSizeBytes: int64(config.PeekSizeMiBs * 1024 * 1024),
+			Workers:       config.Workers,
 			Stats: stats.New(stats.Config{
 				AbsoluteGoodThroughput: config.GoodThroughputMiBs * 1024 * 1024,
+				NumWorkers:             config.Workers,
 			}),
 		}),
 	}

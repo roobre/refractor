@@ -1,6 +1,8 @@
 package pool
 
 import (
+	"errors"
+	"fmt"
 	"github.com/moby/moby/pkg/namesgenerator"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -20,8 +22,10 @@ type Pool struct {
 }
 
 type Config struct {
-	Workers int
-	Stats   *stats.Stats
+	Workers       int
+	Stats         *stats.Stats
+	PeekSizeBytes int64
+	PeekTimeout   time.Duration
 }
 
 func New(config Config) *Pool {
@@ -65,48 +69,94 @@ func (p *Pool) work() {
 }
 
 func (p *Pool) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	retries := 0
+	for {
+		if retries > 3 {
+			log.Errorf("Max retries for %s exhausted", r.URL.Path)
+			break
+		}
+
+		err, retryable := p.tryRequest(r, rw)
+		if err != nil {
+			log.Errorf("%v", err)
+			if !retryable {
+				break
+			}
+		}
+
+		retries++
+	}
+
+	rw.WriteHeader(http.StatusInternalServerError)
+	return
+}
+
+func (p *Pool) tryRequest(r *http.Request, rw http.ResponseWriter) (error, bool) {
 	responseChan := make(chan client.Response)
 	request := client.Request{
 		Path:         r.URL.Path,
 		ResponseChan: responseChan,
 	}
 
-	retries := 0
-	for {
-		if retries > 3 {
-			log.Errorf("Max retries for %s exhausted", r.URL.Path)
-			rw.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		log.Debugf("Dispatching request %q to workers", r.URL.Path)
-		p.requests <- request
-		response := <-responseChan
-		if response.Error != nil {
-			log.Warnf("Worker returned an error for %q, requeuing: %v", r.URL.Path, response.Error)
-			retries++
-			continue
-		}
-
-		if response.HTTPResponse.StatusCode != http.StatusOK {
-			// TODO: Hack: Archlinux mirrors are somehow expected to return 404 for .sig files.
-			// For this reason, we do not attempt to retry 404s for .sig files.
-			if !strings.HasSuffix(r.URL.Path, ".sig") {
-				log.Warnf("Worker returned an error for %q, requeuing: %v", r.URL.Path, response.Error)
-				retries++
-				continue
-			}
-		}
-
-		//maps.Copy(rw.Header(), response.HTTPResponse.Header)
-		rw.WriteHeader(response.HTTPResponse.StatusCode)
-		_, err := io.Copy(rw, response.HTTPResponse.Body)
-		if err != nil {
-			log.Errorf("Could not write response to %s back to client: %v", r.URL.Path, err)
-			return
-		}
-		response.Done()
-
-		return
+	log.Debugf("Dispatching request %s to workers", request.Path)
+	p.requests <- request
+	response := <-responseChan
+	if response.Error != nil {
+		return fmt.Errorf("%s%s errored: %w", response.Worker, request.Path, response.Error), true
 	}
+
+	if response.HTTPResponse.StatusCode != http.StatusOK {
+		// TODO: Hack: Archlinux mirrors are somehow expected to return 404 for .sig files.
+		// For this reason, we do not attempt to retry 404s for .sig files.
+		if !strings.HasSuffix(r.URL.Path, ".sig") {
+			return fmt.Errorf("%s%s returned non-200 status: %d", response.Worker, request.Path, response.HTTPResponse.StatusCode), true
+		}
+	}
+
+	retryable := false
+	written, err := p.writeResponse(response.HTTPResponse, rw)
+	response.Done(written)
+	if errors.Is(err, errPeek) {
+		// Peek errors are retryable as we haven't written anything to the client yet
+		err = fmt.Errorf("peek timed out: %w", err)
+		retryable = true
+	}
+
+	if err != nil {
+		err = fmt.Errorf("writing request %s%s to client: %w", response.Worker, request.Path, err)
+		return err, retryable
+	}
+
+	return nil, false
+}
+
+func (p *Pool) writeResponse(response *http.Response, rw http.ResponseWriter) (int64, error) {
+	peeker := Peeker{
+		SizeBytes: p.PeekSizeBytes,
+		Timeout:   p.PeekTimeout,
+	}
+	// Peek body before writing headers
+	peeked, err := peeker.Peek(response.Body)
+	if err != nil {
+		_ = response.Body.Close()
+		return 0, fmt.Errorf("%w: %v", errPeek, err)
+	}
+
+	for header, name := range response.Header {
+		rw.Header().Set(header, name[0])
+	}
+
+	rw.WriteHeader(response.StatusCode)
+	peekedWritten, err := rw.Write(peeked)
+	if err != nil {
+		return int64(peekedWritten), fmt.Errorf("writing peeked body: %w", err)
+	}
+
+	restWritten, err := io.Copy(rw, response.Body)
+	written := int64(peekedWritten) + restWritten
+	if err != nil {
+		return written, fmt.Errorf("writing body: %w", err)
+	}
+
+	return written, nil
 }
