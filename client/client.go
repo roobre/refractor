@@ -59,7 +59,7 @@ func (c *Client) Do(path string) (r Response) {
 		return
 	}
 
-	resp.Header.Add("X-Shattered-By", c.String())
+	resp.Header.Add("X-refractored-By", c.String())
 	r.HTTPResponse = resp
 
 	return

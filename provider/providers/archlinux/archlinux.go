@@ -6,7 +6,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
-	"roob.re/shatter/provider/types"
+	"roob.re/refractor/provider/types"
 	"strings"
 	"time"
 )

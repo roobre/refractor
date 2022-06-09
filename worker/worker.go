@@ -4,8 +4,8 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"net/http"
-	"roob.re/shatter/client"
-	"roob.re/shatter/stats"
+	"roob.re/refractor/client"
+	"roob.re/refractor/stats"
 	"strings"
 	"time"
 )

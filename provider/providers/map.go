@@ -1,7 +1,7 @@
 package providers
 
-import "roob.re/shatter/provider/providers/archlinux"
-import "roob.re/shatter/provider/types"
+import "roob.re/refractor/provider/providers/archlinux"
+import "roob.re/refractor/provider/types"
 
 // Map contains a list of provider builders given their friendly name.
 var Map = map[string]types.Builder{

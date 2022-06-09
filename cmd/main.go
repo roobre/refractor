@@ -4,11 +4,11 @@ import (
 	"flag"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"roob.re/shatter/server"
+	"roob.re/refractor/server"
 )
 
 func main() {
-	configPath := flag.String("config", "shatter.yaml", "Path to shatter.yaml file")
+	configPath := flag.String("config", "refractor.yaml", "Path to refractor.yaml file")
 	address := flag.String("address", ":8080", "Address to listen on")
 	logLvl := flag.String("log-level", "info", "Verbosity level. Accepts levels understood by logrus")
 	flag.Parse()

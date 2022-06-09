@@ -6,12 +6,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . ./
-RUN go build -o /shatter ./cmd
+RUN go build -o /refractor ./cmd
 
 FROM alpine:3.16
 
-COPY --from=builder /shatter /bin/
-COPY --from=builder /build/shatter.yaml /config/shatter.yaml
+COPY --from=builder /refractor /bin/
+COPY --from=builder /build/refractor.yaml /config/refractor.yaml
 
-ENTRYPOINT ["/bin/shatter"]
-CMD ["-config", "/config/shatter.yaml"]
+ENTRYPOINT ["/bin/refractor"]
+CMD ["-config", "/config/refractor.yaml"]

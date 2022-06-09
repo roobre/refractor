@@ -6,15 +6,15 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
-	"roob.re/shatter/pool"
-	"roob.re/shatter/provider/providers"
-	"roob.re/shatter/provider/types"
-	"roob.re/shatter/stats"
+	"roob.re/refractor/pool"
+	"roob.re/refractor/provider/providers"
+	"roob.re/refractor/provider/types"
+	"roob.re/refractor/stats"
 )
 
 type Config struct {
 	// Workers is the amount of workers that will serve requests in parallel. It should be higher that the amount of
-	// expected connections to Shatter, otherwise requests will be serialized.
+	// expected connections to refractor, otherwise requests will be serialized.
 	Workers int `yaml:"workers"`
 
 	// GoodThroughputMiBs is an absolute value, in MiB/s, of what is considered good throughput. Workers that perform
