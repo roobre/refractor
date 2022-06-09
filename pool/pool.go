@@ -96,6 +96,7 @@ func (p *Pool) tryRequest(r *http.Request, rw http.ResponseWriter) (error, bool)
 	request := client.Request{
 		Path:         r.URL.Path,
 		ResponseChan: responseChan,
+		Header:       r.Header,
 	}
 
 	log.Debugf("Dispatching request %s to workers", request.Path)
@@ -142,8 +143,10 @@ func (p *Pool) writeResponse(response *http.Response, rw http.ResponseWriter) (i
 		return 0, fmt.Errorf("%w: %v", errPeek, err)
 	}
 
-	for header, name := range response.Header {
-		rw.Header().Set(header, name[0])
+	for header, values := range response.Header {
+		for _, value := range values {
+			rw.Header().Add(header, value)
+		}
 	}
 
 	rw.WriteHeader(response.StatusCode)

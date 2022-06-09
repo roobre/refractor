@@ -33,7 +33,7 @@ func (w Worker) Work(requests chan client.Request) error {
 		log.Infof("Requesting %s:%s", w.Name, w.Client.URL(req.Path))
 
 		start := time.Now()
-		response := w.Client.Do(req.Path)
+		response := w.Client.Do(req)
 		response.Worker = w.String()
 
 		if response.Error != nil {

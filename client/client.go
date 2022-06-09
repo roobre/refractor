@@ -15,8 +15,9 @@ type Client struct {
 }
 
 type Request struct {
-	ResponseChan chan Response
 	Path         string
+	Header       http.Header
+	ResponseChan chan Response
 }
 
 type Response struct {
@@ -65,12 +66,12 @@ func (c *Client) URL(path string) string {
 	return url
 }
 
-func (c *Client) Do(path string) (r Response) {
+func (c *Client) Do(request Request) (r Response) {
 	// TODO: Calculate a better deadline by making a HEAD request and a target throughput
 	//ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	//defer cancel()
 
-	url := c.URL(path)
+	url := c.URL(request.Path)
 
 	//req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -79,6 +80,7 @@ func (c *Client) Do(path string) (r Response) {
 		return
 	}
 
+	req.Header = request.Header
 	log.Debugf("%s %s", req.Method, req.URL.String())
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
