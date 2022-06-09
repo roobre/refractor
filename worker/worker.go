@@ -30,10 +30,11 @@ func (w Worker) Work(requests chan client.Request) error {
 			return fmt.Errorf("worker %s is not a good performer, evicting and requeuing request", w.Name)
 		}
 
-		log.Debugf("%s handling %s", w.String(), req.Path)
+		log.Infof("Requesting %s:%s", w.Name, w.Client.URL(req.Path))
 
 		start := time.Now()
 		response := w.Client.Do(req.Path)
+		response.Worker = w.String()
 
 		if response.Error != nil {
 			go func() {
@@ -50,9 +51,9 @@ func (w Worker) Work(requests chan client.Request) error {
 			}
 		}
 
-		response.Done = func() {
+		response.Done = func(written int64) {
 			go w.Stats.Update(w.String(), stats.Sample{
-				Bytes:    response.HTTPResponse.ContentLength,
+				Bytes:    written,
 				Duration: time.Since(start),
 			})
 		}
