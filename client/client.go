@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const clientHeader = "X-Refracted-By"
+
 type Client struct {
 	HTTPClient *http.Client
 	baseUrl    string
@@ -88,7 +90,7 @@ func (c *Client) Do(request Request) (r Response) {
 		return
 	}
 
-	resp.Header.Add("X-refractored-By", c.String())
+	resp.Header.Add(clientHeader, c.String())
 	r.HTTPResponse = resp
 
 	return
