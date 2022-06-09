@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 	"roob.re/shatter/client"
-	"roob.re/shatter/providers"
+	"roob.re/shatter/provider/types"
 	"roob.re/shatter/stats"
 	"roob.re/shatter/worker"
 	"strings"
@@ -29,7 +29,7 @@ func New(workers int) *Pool {
 	}
 }
 
-func (p *Pool) Feed(provider providers.Provider) {
+func (p *Pool) Feed(provider types.Provider) {
 	log.Infof("Starting to feed mirrors to the pool")
 	for {
 		url, err := provider.Mirror()

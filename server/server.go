@@ -4,15 +4,15 @@ import (
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"roob.re/shatter/pool"
-	"roob.re/shatter/providers"
+	"roob.re/shatter/provider/types"
 )
 
 type Server struct {
 	pool     *pool.Pool
-	provider providers.Provider
+	provider types.Provider
 }
 
-func New(provider providers.Provider) *Server {
+func New(provider types.Provider) *Server {
 	s := &Server{}
 	s.pool = pool.New(8)
 	s.provider = provider

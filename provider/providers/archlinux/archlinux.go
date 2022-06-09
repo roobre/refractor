@@ -6,20 +6,40 @@ import (
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
+	"roob.re/shatter/provider/types"
 	"strings"
 	"time"
 )
 
 const mirrorsUrl = "https://archlinux.org/mirrors/status/json/"
 
+type Config struct {
+	Countries map[string]bool `yaml:"countries"`
+	MaxScore  float64         `yaml:"maxScore"`
+}
+
 type Provider struct {
-	Countries map[string]bool
-	MaxScore  float64
+	Config
 
 	mirrorlist struct {
 		list    []mirror
 		fetched time.Time
 	}
+}
+
+func New(conf interface{}) (types.Provider, error) {
+	acConfig, ok := conf.(*Config)
+	if !ok {
+		return nil, fmt.Errorf("internal error: supplied config is not of the expected type")
+	}
+
+	return &Provider{
+		Config: *acConfig,
+	}, nil
+}
+
+func DefaultConfig() interface{} {
+	return &Config{}
 }
 
 type mirror struct {
