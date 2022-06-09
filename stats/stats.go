@@ -46,14 +46,14 @@ func New(c Config) *Stats {
 	}
 }
 
-func (p *Stats) Remove(name string) {
-	p.Lock()
-	defer p.Unlock()
+func (s *Stats) Remove(name string) {
+	s.Lock()
+	defer s.Unlock()
 
-	delete(p.workers, name)
+	delete(s.workers, name)
 }
 
-func (p *Stats) Update(name string, sample Sample) {
+func (s *Stats) Update(name string, sample Sample) {
 	if sample.Bytes < minSampleBytes {
 		log.Debugf("Not enough bytes for a meaningful throughput sample, dropping (%d)", sample.Bytes)
 		return
@@ -68,13 +68,13 @@ func (p *Stats) Update(name string, sample Sample) {
 	log.Infof("Recording sample of %.2fMiB/s for %s", throughput/1024/1024, name)
 
 	defer func() {
-		go p.report()
+		go s.report()
 	}()
 
-	p.Lock()
-	defer p.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
-	w := p.workers[name]
+	w := s.workers[name]
 	w.average = (w.average*float64(w.samples) + throughput) / (float64(w.samples) + 1)
 	w.samples++
 	if w.samples > maxSamples {
@@ -84,11 +84,11 @@ func (p *Stats) Update(name string, sample Sample) {
 		w.samples = maxSamples
 	}
 
-	p.workers[name] = w
+	s.workers[name] = w
 }
 
-func (p *Stats) GoodPerformer(name string) bool {
-	entries := p.workerList()
+func (s *Stats) GoodPerformer(name string) bool {
+	entries := s.workerList()
 
 	if len(entries) < 3 {
 		log.Debugf("Stats collected for less than 2 workers, cannot emit a judgement yet")
@@ -104,9 +104,9 @@ func (p *Stats) GoodPerformer(name string) bool {
 		return true
 	}
 
-	log.Debugf("Worker %s is in position %d/%d", name, position+1, len(p.workers))
+	log.Debugf("Worker %s is in position %d/%d", name, position+1, len(s.workers))
 
-	if entries[position].throughput > p.AbsoluteGoodThroughput {
+	if entries[position].throughput > s.AbsoluteGoodThroughput {
 		log.Debugf("Worker %s has an absolutely good throughput", name)
 		return true
 	}
@@ -115,36 +115,36 @@ func (p *Stats) GoodPerformer(name string) bool {
 	return position <= len(entries)-3
 }
 
-func (p *Stats) report() {
-	if !p.shouldReport() {
+func (s *Stats) report() {
+	if !s.shouldReport() {
 		return
 	}
 
-	list := p.workerList()
+	list := s.workerList()
 	for position, worker := range list {
 		log.Infof("Worker #%d (%s): %.2f MiB/s", position+1, worker.name, worker.throughput/1024/1024)
 	}
 }
 
-func (p *Stats) shouldReport() bool {
-	p.Lock()
-	defer p.Unlock()
+func (s *Stats) shouldReport() bool {
+	s.Lock()
+	defer s.Unlock()
 
-	if time.Since(p.lastReport) < 10*time.Second {
+	if time.Since(s.lastReport) < 10*time.Second {
 		return false
 	}
 
-	p.lastReport = time.Now()
+	s.lastReport = time.Now()
 	return true
 }
 
-func (p *Stats) workerList() []namedEntry {
-	p.RLock()
-	defer p.RUnlock()
+func (s *Stats) workerList() []namedEntry {
+	s.RLock()
+	defer s.RUnlock()
 
-	entries := make([]namedEntry, 0, len(p.workers))
+	entries := make([]namedEntry, 0, len(s.workers))
 
-	for wName, entry := range p.workers {
+	for wName, entry := range s.workers {
 		if entry.average == 0 {
 			continue
 		}
