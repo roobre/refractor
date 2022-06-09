@@ -18,6 +18,10 @@ type Config struct {
 	// expected connections to refractor, otherwise requests will be serialized.
 	Workers int `yaml:"workers"`
 
+	// Retries controls how many times a request is re-enqueued after a retryable error occurs.
+	// Errors are considered retryable if they occur before writing anything to the client.
+	Retries int `yaml:"retries"`
+
 	// GoodThroughputMiBs is an absolute value, in MiB/s, of what is considered good throughput. Workers that perform
 	// above this throughput will never get rotated out of the worker pool, even if they are in the last 2 positions.
 	GoodThroughputMiBs float64 `yaml:"goodThroughputMiBs"`
@@ -35,6 +39,7 @@ type Config struct {
 const (
 	defaultPeekSizeMiBs = 1.0
 	defaultPeekTimeout  = 4 * time.Second
+	defaultRetries      = 3
 )
 
 type Server struct {
@@ -78,6 +83,11 @@ func New(configFile io.Reader) (*Server, error) {
 	if config.PeekTimeout == 0 {
 		log.Infof("Defaulting PeekTimeout to %s", defaultPeekTimeout)
 		config.PeekTimeout = defaultPeekTimeout
+	}
+
+	if config.Retries == 0 {
+		log.Infof("Defaulting Retries to %s", defaultRetries)
+		config.Retries = defaultRetries
 	}
 
 	s := &Server{

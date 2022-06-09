@@ -22,6 +22,7 @@ type Pool struct {
 }
 
 type Config struct {
+	Retries       int
 	Workers       int
 	Stats         *stats.Stats
 	PeekSizeBytes int64
@@ -71,7 +72,7 @@ func (p *Pool) work() {
 func (p *Pool) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	retries := 0
 	for {
-		if retries > 3 {
+		if retries > p.Config.Retries {
 			log.Errorf("Max retries for %s exhausted", r.URL.Path)
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
