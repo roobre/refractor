@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "refractor.fullname" . }}
+  labels:
+    {{- include "refractor.labels" . | nindent 4 }}
+data:
+  refractor.yaml: |
+    {{- .Values.config | toYaml | nindent 4 }}
