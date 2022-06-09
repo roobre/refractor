@@ -16,9 +16,52 @@ Refractor is intended to be run either locally, or in a local network where linu
 
 ## Providers
 
-Refractor is designed to be distribution-agnostic, as long as a Provider that can fetch a list of mirrors and feed them to the pool is implemented. For the moment, providers exists for:
+Refractor is designed to be distribution-agnostic, as long as a Provider that can fetch a mirror and feed it to the pool is implemented. Refractor automatically sorts the pool of mirrors automatically by the throughput they provide as request come by. This means that providers do not need to sort or benchmark mirrors before supplying them to the pool.
 
-- Arch Linux (btw)
+It is recommended, however, for providers to apply coarse-grain filter such as physical location, as doing so will allow the pool to stabilize faster.
+
+For the moment, the following providers exist:
+
+### Arch Linux (`archlinux`)
+
+The Arch Linux provider feeds mirrors from `https://archlinux.org/mirrors/status/json/`, after applying some user-defined filters. For now, filtering by country and by score is allowed.
+
+```yaml
+workers: 8
+goodThroughputMiBs: 10
+
+provider:
+  archlinux:
+    maxScore: 5
+    countries:
+      - ES
+      - IT
+      - FR
+      - PT
+```
+
+### Command (`command`)
+
+The Command provider allows to feed to the pool mirror URLs obtained from running an user-defined command. This should help as an stop-gap for supporting distros without coding providers from them.
+
+> ⚠️ Refractor rotates mirrors from the pool very aggressively, which means the specified command will be called multiple times and very often. Please make sure this command is not hammering any public API without appropriate caching.
+
+```yaml
+workers: 8
+goodThroughputMiBs: 10
+
+provider:
+  command:
+    #shell: /bin/bash # Defaults to $SHELL, then to /bin/sh
+    command: |
+      cat <<EOF | sort -R | head -n 1
+        http://foo.bar
+        http://example.local
+        https://another.mirror
+      EOF
+```
+
+### Implement your own!
 
 Providers are very easy to implement, as they only need to be able to retrieve a random mirror from a list:
 
