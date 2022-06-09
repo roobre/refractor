@@ -111,7 +111,7 @@ func (p *Stats) GoodPerformer(name string) bool {
 }
 
 func (p *Stats) report() {
-	if time.Since(p.lastReport) < 10*time.Second {
+	if !p.shouldReport() {
 		return
 	}
 
@@ -119,6 +119,18 @@ func (p *Stats) report() {
 	for position, worker := range list {
 		log.Infof("Worker #%d (%s): %.2f MiB/s", position+1, worker.name, worker.throughput/1024/1024)
 	}
+}
+
+func (p *Stats) shouldReport() bool {
+	p.Lock()
+	defer p.Unlock()
+
+	if time.Since(p.lastReport) < 10*time.Second {
+		return false
+	}
+
+	p.lastReport = time.Now()
+	return true
 }
 
 func (p *Stats) workerList() []namedEntry {
