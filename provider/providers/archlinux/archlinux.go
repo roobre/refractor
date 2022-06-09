@@ -13,7 +13,7 @@ import (
 
 const mirrorsUrl = "https://archlinux.org/mirrors/status/json/"
 
-type Config struct {
+type config struct {
 	CountriesList []string `yaml:"countries"`
 	MaxScore      float64  `yaml:"maxScore"`
 
@@ -21,7 +21,7 @@ type Config struct {
 }
 
 type Provider struct {
-	Config
+	config
 
 	mirrorlist struct {
 		list    []mirror
@@ -30,7 +30,7 @@ type Provider struct {
 }
 
 func New(conf interface{}) (types.Provider, error) {
-	acConfig, ok := conf.(*Config)
+	acConfig, ok := conf.(*config)
 	if !ok {
 		return nil, fmt.Errorf("internal error: supplied config is not of the expected type")
 	}
@@ -42,12 +42,12 @@ func New(conf interface{}) (types.Provider, error) {
 	}
 
 	return &Provider{
-		Config: *acConfig,
+		config: *acConfig,
 	}, nil
 }
 
 func DefaultConfig() interface{} {
-	return &Config{}
+	return &config{}
 }
 
 type mirror struct {
