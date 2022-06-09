@@ -83,6 +83,12 @@ Implementing providers in code is encouraged as it provides maximum flexibility 
 - **Absolutely good throughput**: Mirrors that perform better than `goodThroughputMiBs` will not be rotated from the pool, even if they are the least performant.
 - **Request peeking**: Refractor will "peek" the first few megs (`peekSizeMiBs`) from the connection to a mirror before passing the response to the client. If this peek operation takes too long (`peekTimeout`), the request will be requeued to a different mirror.
 
+## Trivia
+
+- The name "Refractor" is a gimmick to [Reflector](https://wiki.archlinux.org/title/Reflector)
+- Refractor is similar to [flexo](https://github.com/nroi/flexo), with a more aggressive mirror switching strategy
+- The author does in fact like tests, but they're short on vacation days
+
 ## Project status
 
 Currently this project is in _indev_ stage, meaning it is currently being tested on my local machine. Contributions are welcome, especially if you get in touch with me by opening an issue or sending me an email.
