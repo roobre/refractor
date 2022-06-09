@@ -62,7 +62,7 @@ func New(configFile io.Reader) (*Server, error) {
 		pool: pool.New(pool.Config{
 			Workers: config.Workers,
 			Stats: stats.New(stats.Config{
-				AbsoluteGoodThroughput: config.GoodThroughputMiBs,
+				AbsoluteGoodThroughput: config.GoodThroughputMiBs * 1024 * 1024,
 			}),
 		}),
 	}
