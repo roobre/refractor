@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 	"sync"
@@ -8,9 +9,11 @@ import (
 )
 
 const (
-	minSampleBytes    = 1024
-	minSampleDuration = 200 * time.Millisecond
-	maxSamples        = 20.0
+	minSampleBytes = 1024
+	// Requests below minSampleBytes will not be counted UNLESS they took more than minDurationForMinBytes
+	minDurationForMinBytes = 1 * time.Second
+	minSampleDuration      = 200 * time.Millisecond
+	maxSamples             = 20.0
 )
 
 type Stats struct {
@@ -27,6 +30,14 @@ type Config struct {
 type Sample struct {
 	Bytes    int64
 	Duration time.Duration
+}
+
+func (s Sample) String() string {
+	return fmt.Sprintf("%.2f MiB/s", s.Throughput()/1024/1024)
+}
+
+func (s Sample) Throughput() float64 {
+	return float64(s.Bytes) / s.Duration.Seconds()
 }
 
 type workerEntry struct {
@@ -54,7 +65,7 @@ func (s *Stats) Remove(name string) {
 }
 
 func (s *Stats) Update(name string, sample Sample) {
-	if sample.Bytes < minSampleBytes {
+	if sample.Bytes < minSampleBytes && sample.Duration < minDurationForMinBytes {
 		log.Debugf("Not enough bytes for a meaningful throughput sample, dropping (%d)", sample.Bytes)
 		return
 	}
@@ -64,8 +75,7 @@ func (s *Stats) Update(name string, sample Sample) {
 		return
 	}
 
-	throughput := float64(sample.Bytes) / sample.Duration.Seconds()
-	log.Infof("Recording sample of %.2fMiB/s for %s", throughput/1024/1024, name)
+	log.Infof("Recording sample of %s for %s", sample.String(), name)
 
 	defer func() {
 		go s.report()
@@ -75,7 +85,7 @@ func (s *Stats) Update(name string, sample Sample) {
 	defer s.Unlock()
 
 	w := s.workers[name]
-	w.average = (w.average*float64(w.samples) + throughput) / (float64(w.samples) + 1)
+	w.average = (w.average*float64(w.samples) + sample.Throughput()) / (float64(w.samples) + 1)
 	w.samples++
 	if w.samples > maxSamples {
 		// As time passes, mirrors that performed very well in the past might stack an indefinitely large amount
