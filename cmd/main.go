@@ -8,11 +8,17 @@ import (
 )
 
 func main() {
-	log.SetLevel(log.InfoLevel)
-
 	configPath := flag.String("config", "shatter.yaml", "Path to shatter.yaml file")
 	address := flag.String("address", ":8080", "Address to listen on")
+	logLvl := flag.String("log-level", "info", "Verbosity level. Accepts levels understood by logrus")
 	flag.Parse()
+
+	level, err := log.ParseLevel(*logLvl)
+	if err != nil {
+		log.Fatalf("Could not parse log level %q", *logLvl)
+	}
+
+	log.SetLevel(level)
 
 	config, err := os.Open(*configPath)
 	if err != nil {
