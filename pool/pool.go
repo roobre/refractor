@@ -73,22 +73,23 @@ func (p *Pool) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	for {
 		if retries > 3 {
 			log.Errorf("Max retries for %s exhausted", r.URL.Path)
-			break
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
 		err, retryable := p.tryRequest(r, rw)
-		if err != nil {
-			log.Errorf("%v", err)
-			if !retryable {
-				break
-			}
+		if err == nil {
+			return
 		}
 
+		log.Errorf("%v", err)
+		if !retryable {
+			return
+		}
+
+		log.Warnf("Retrying %s", r.URL.Path)
 		retries++
 	}
-
-	rw.WriteHeader(http.StatusInternalServerError)
-	return
 }
 
 func (p *Pool) tryRequest(r *http.Request, rw http.ResponseWriter) (error, bool) {
