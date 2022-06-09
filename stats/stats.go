@@ -25,6 +25,7 @@ type Stats struct {
 
 type Config struct {
 	AbsoluteGoodThroughput float64
+	NumWorkers             int
 }
 
 type Sample struct {
@@ -122,7 +123,7 @@ func (s *Stats) GoodPerformer(name string) bool {
 	}
 
 	// We're good performers if we're earlier than the last two positions
-	return position <= len(entries)-3
+	return position <= s.NumWorkers-3
 }
 
 func (s *Stats) report() {
