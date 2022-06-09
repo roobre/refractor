@@ -8,16 +8,20 @@ import (
 )
 
 const (
-	minSampleBytes         = 1024
-	minSampleDuration      = 200 * time.Millisecond
-	absoluteGoodThroughput = 20.0 * 1024 * 1024
-	maxSamples             = 20.0
+	minSampleBytes    = 1024
+	minSampleDuration = 200 * time.Millisecond
+	maxSamples        = 20.0
 )
 
 type Stats struct {
+	Config
 	sync.RWMutex
 	workers    map[string]workerEntry
 	lastReport time.Time
+}
+
+type Config struct {
+	AbsoluteGoodThroughput float64
 }
 
 type Sample struct {
@@ -35,8 +39,9 @@ type namedEntry struct {
 	throughput float64
 }
 
-func New() *Stats {
+func New(c Config) *Stats {
 	return &Stats{
+		Config:  c,
 		workers: map[string]workerEntry{},
 	}
 }
@@ -101,7 +106,7 @@ func (p *Stats) GoodPerformer(name string) bool {
 
 	log.Debugf("Worker %s is in position %d/%d", name, position+1, len(p.workers))
 
-	if entries[position].throughput > absoluteGoodThroughput {
+	if entries[position].throughput > p.AbsoluteGoodThroughput {
 		log.Debugf("Worker %s has an absolutely good throughput", name)
 		return true
 	}

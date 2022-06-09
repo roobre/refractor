@@ -14,8 +14,10 @@ import (
 const mirrorsUrl = "https://archlinux.org/mirrors/status/json/"
 
 type Config struct {
-	Countries map[string]bool `yaml:"countries"`
-	MaxScore  float64         `yaml:"maxScore"`
+	CountriesList []string `yaml:"countries"`
+	MaxScore      float64  `yaml:"maxScore"`
+
+	countries map[string]bool
 }
 
 type Provider struct {
@@ -31,6 +33,12 @@ func New(conf interface{}) (types.Provider, error) {
 	acConfig, ok := conf.(*Config)
 	if !ok {
 		return nil, fmt.Errorf("internal error: supplied config is not of the expected type")
+	}
+
+	// Convert country list (human friendly) into map (code friendly)
+	acConfig.countries = map[string]bool{}
+	for _, country := range acConfig.CountriesList {
+		acConfig.countries[country] = true
 	}
 
 	return &Provider{
@@ -64,7 +72,7 @@ func (a *Provider) filter(all []mirror) []mirror {
 			continue
 		}
 
-		if len(a.Countries) > 0 && !a.Countries[mirror.Country] {
+		if len(a.countries) > 0 && !a.countries[mirror.Country] {
 			continue
 		}
 

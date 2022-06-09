@@ -14,18 +14,21 @@ import (
 )
 
 type Pool struct {
-	numWorkers int
-	stats      *stats.Stats
-	clients    chan *client.Client
-	requests   chan client.Request
+	Config
+	clients  chan *client.Client
+	requests chan client.Request
 }
 
-func New(workers int) *Pool {
+type Config struct {
+	Workers int
+	Stats   *stats.Stats
+}
+
+func New(config Config) *Pool {
 	return &Pool{
-		numWorkers: workers,
-		stats:      stats.New(),
-		clients:    make(chan *client.Client),
-		requests:   make(chan client.Request),
+		Config:   config,
+		clients:  make(chan *client.Client),
+		requests: make(chan client.Request),
 	}
 }
 
@@ -42,7 +45,7 @@ func (p *Pool) Feed(provider types.Provider) {
 }
 
 func (p *Pool) Run() {
-	for i := 0; i < p.numWorkers; i++ {
+	for i := 0; i < p.Workers; i++ {
 		log.Debugf("Starting worker manager thread #%d", i)
 		go p.work()
 	}
@@ -53,11 +56,11 @@ func (p *Pool) work() {
 		worker := worker.Worker{
 			Name:   namesgenerator.GetRandomName(0),
 			Client: cli,
-			Stats:  p.stats,
+			Stats:  p.Stats,
 		}
 		log.Debugf("Starting worker %s for %s", worker.Name, worker.Client.String())
 		log.Error(worker.Work(p.requests))
-		p.stats.Remove(worker.String())
+		p.Stats.Remove(worker.String())
 	}
 }
 
