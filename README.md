@@ -61,9 +61,11 @@ provider:
       EOF
 ```
 
+The specified command is expected to return a single line containing the mirror URL. If more than one line is printed, Refractor will emit a warning and ignore the rest. Refractor will echo the command's standard error as log lines with `warning` level.
+
 ### Implement your own!
 
-Providers are very easy to implement, as they only need to be able to retrieve a random mirror from a list:
+Providers are very easy to implement in-code, as they only need to be able to retrieve a random mirror from a list.
 
 ```go
 type Provider interface {
@@ -71,7 +73,15 @@ type Provider interface {
 }
 ```
 
-As an example, the Arch Linux mirror provider retrieves the list of mirrors from `https://archlinux.org/mirrors/status/json/`, applies some user-defined country and score settings, and returns a random mirror from the resulting list. 
+As an example, the Arch Linux mirror provider retrieves the list of mirrors from `https://archlinux.org/mirrors/status/json/`, applies some user-defined country and score settings, and returns a random mirror from the resulting list.
+
+Implementing providers in code is encouraged as it provides maximum flexibility to control caching and configuration options. PRs are welcome!
+
+## Advanced features
+
+- **Average window**: Only the last few throughput measurments are averaged when checking how a mirror is performing. This allow rotating out mirrors that start to behave poorly even if they have been very performant in the past.
+- **Absolutely good throughput**: Mirrors that perform better than `goodThroughputMiBs` will not be rotated from the pool, even if they are the least performant.
+- **Request peeking**: Refractor will "peek" the first few megs (`peekSizeMiBs`) from the connection to a mirror before passing the response to the client. If this peek operation takes too long (`peekTimeout`), the request will be requeued to a different mirror.
 
 ## Project status
 
