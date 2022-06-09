@@ -21,6 +21,8 @@ func (w Worker) String() string {
 }
 
 func (w Worker) Work(requests chan client.Request) error {
+	log.Debugf("Starting worker %s", w.String())
+
 	for req := range requests {
 		if !w.Stats.GoodPerformer(w.String()) {
 			go func() {

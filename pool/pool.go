@@ -63,7 +63,6 @@ func (p *Pool) work() {
 			Client: cli,
 			Stats:  p.Stats,
 		}
-		log.Debugf("Starting worker %s for %s", worker.Name, worker.Client.String())
 		log.Error(worker.Work(p.requests))
 		p.Stats.Remove(worker.String())
 	}
