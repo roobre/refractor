@@ -107,7 +107,7 @@ func (p *Pool) tryRequest(r *http.Request, rw http.ResponseWriter) (error, bool)
 		return fmt.Errorf("%s%s errored: %w", response.Worker, request.Path, response.Error), true
 	}
 
-	if response.HTTPResponse.StatusCode != http.StatusOK {
+	if response.HTTPResponse.StatusCode >= 400 {
 		// TODO: Hack: Archlinux mirrors are somehow expected to return 404 for .sig files.
 		// For this reason, we do not attempt to retry 404s for .sig files.
 		if !strings.HasSuffix(r.URL.Path, ".sig") {
