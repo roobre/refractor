@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"roob.re/refractor/client"
+	"roob.re/refractor/pool/peeker"
 	"roob.re/refractor/provider/types"
 	"roob.re/refractor/stats"
 	"roob.re/refractor/worker"
@@ -16,6 +17,7 @@ import (
 
 type Pool struct {
 	Config
+	peeker   peeker.Peeker
 	clients  chan *client.Client
 	requests chan client.Request
 }
@@ -34,6 +36,10 @@ func New(config Config) *Pool {
 		Config:   config,
 		clients:  make(chan *client.Client),
 		requests: make(chan client.Request),
+		peeker: peeker.Peeker{
+			SizeBytes: config.PeekSizeBytes,
+			Timeout:   config.PeekTimeout,
+		},
 	}
 }
 
@@ -115,33 +121,22 @@ func (p *Pool) tryRequest(r *http.Request, rw http.ResponseWriter) (error, bool)
 		}
 	}
 
-	retryable := false
 	written, err := p.writeResponse(response.HTTPResponse, rw)
 	response.Done(written)
-	if errors.Is(err, errPeek) {
-		// Peek errors are retryable as we haven't written anything to the client yet
-		err = fmt.Errorf("peek timed out: %w", err)
-		retryable = true
-	}
 
 	if err != nil {
 		err = fmt.Errorf("writing request %s%s to client: %w", response.Worker, request.Path, err)
-		return err, retryable
+		return err, written == 0
 	}
 
 	return nil, false
 }
 
 func (p *Pool) writeResponse(response *http.Response, rw http.ResponseWriter) (int64, error) {
-	peeker := Peeker{
-		SizeBytes: p.PeekSizeBytes,
-		Timeout:   p.PeekTimeout,
-	}
 	// Peek body before writing headers
-	peeked, err := peeker.Peek(response.Body)
-	if err != nil {
-		_ = response.Body.Close()
-		return 0, fmt.Errorf("%w: %v", errPeek, err)
+	peeked, err := p.peeker.Peek(response.Body)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, fmt.Errorf("peeking response body: %w", err)
 	}
 
 	for header, values := range response.Header {
