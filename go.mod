@@ -9,6 +9,8 @@ require (
 )
 
 require (
+	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417 // indirect
 	github.com/yelinaung/go-haikunator v0.0.0-20220607145230-74ef2cbd6d59 // indirect
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 )

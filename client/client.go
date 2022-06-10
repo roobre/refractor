@@ -1,7 +1,9 @@
 package client
 
 import (
+	"context"
 	"fmt"
+	"github.com/rs/dnscache"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"net/http"
@@ -13,6 +15,7 @@ const clientHeader = "X-Refracted-By"
 
 type Client struct {
 	HTTPClient *http.Client
+	resolver   *dnscache.Resolver
 	baseUrl    string
 }
 
@@ -32,15 +35,34 @@ type Response struct {
 func NewClient(baseUrl string) *Client {
 	// TODO: Make all these timeouts configurable
 	// Ref: https://blog.cloudflare.com/content/images/2016/06/Timeouts-002.png
-	dialer := &net.Dialer{
-		Timeout:  2 * time.Second,
-		Resolver: &net.Resolver{},
+	timeoutDialer := &net.Dialer{
+		Timeout: 2 * time.Second,
 	}
-	dialer.Resolver.Dial = dialer.DialContext
+
+	resolver := &dnscache.Resolver{}
+
+	// Stolen from https://github.com/rs/dnscache
+	dialContext := func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, fmt.Errorf("splitting host and port %q: %w", addr, err)
+		}
+		ips, err := resolver.LookupHost(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("looking up %q: %w", host, err)
+		}
+		for _, ip := range ips {
+			conn, err = timeoutDialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
+			if err == nil {
+				break
+			}
+		}
+		return
+	}
 
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           dialer.DialContext,
+		DialContext:           dialContext,
 		MaxIdleConns:          10,
 		ResponseHeaderTimeout: 2 * time.Second,
 		IdleConnTimeout:       2 * time.Second,
@@ -52,7 +74,8 @@ func NewClient(baseUrl string) *Client {
 			Transport: transport,
 			Timeout:   2 * time.Minute,
 		},
-		baseUrl: baseUrl,
+		baseUrl:  baseUrl,
+		resolver: resolver,
 	}
 }
 
@@ -69,6 +92,8 @@ func (c *Client) URL(path string) string {
 }
 
 func (c *Client) Do(request Request) (r Response) {
+	c.resolver.Refresh(true)
+
 	// TODO: Calculate a better deadline by making a HEAD request and a target throughput
 	//ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	//defer cancel()
