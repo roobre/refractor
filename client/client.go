@@ -64,9 +64,9 @@ func NewClient(baseUrl string) *Client {
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dialContext,
 		MaxIdleConns:          10,
-		ResponseHeaderTimeout: 2 * time.Second,
-		IdleConnTimeout:       2 * time.Second,
-		TLSHandshakeTimeout:   2 * time.Second,
+		ResponseHeaderTimeout: 1 * time.Second,
+		IdleConnTimeout:       1 * time.Second,
+		TLSHandshakeTimeout:   1 * time.Second,
 	}
 
 	return &Client{
