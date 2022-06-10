@@ -76,7 +76,7 @@ func (s *Stats) Update(name string, sample Sample) {
 		return
 	}
 
-	log.Debugf("Recording sample of %s for %s", sample.String(), name)
+	log.Infof("Recording sample of %s for %s", sample.String(), name)
 
 	defer func() {
 		go s.report()
