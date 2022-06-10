@@ -87,7 +87,7 @@ func New(configFile io.Reader) (*Server, error) {
 	}
 
 	if config.Retries == 0 {
-		log.Infof("Defaulting Retries to %s", defaultRetries)
+		log.Infof("Defaulting Retries to %d", defaultRetries)
 		config.Retries = defaultRetries
 	}
 
@@ -96,6 +96,7 @@ func New(configFile io.Reader) (*Server, error) {
 			PeekTimeout:   config.PeekTimeout,
 			PeekSizeBytes: int64(config.PeekSizeMiBs * 1024 * 1024),
 			Workers:       config.Workers,
+			Retries:       config.Retries,
 			Namer:         names.Haiku,
 			Stats: stats.New(stats.Config{
 				AbsoluteGoodThroughput: config.GoodThroughputMiBs * 1024 * 1024,
