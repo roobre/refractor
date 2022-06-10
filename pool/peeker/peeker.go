@@ -29,7 +29,7 @@ func (p *Peeker) Peek(body io.Reader) ([]byte, error) {
 
 	select {
 	case <-timer.C:
-		return nil, fmt.Errorf("could not read %dKiB within %.2fs: %w", p.SizeBytes>>10, p.Timeout.Seconds(), ErrPeekTimeout)
+		return nil, fmt.Errorf("could not read %.2fMiB within %s: %w", float64(p.SizeBytes)/1024/1024, p.Timeout.String(), ErrPeekTimeout)
 	case result := <-result:
 		return result.buf, result.err
 	}
