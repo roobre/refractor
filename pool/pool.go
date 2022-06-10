@@ -3,7 +3,6 @@ package pool
 import (
 	"errors"
 	"fmt"
-	"github.com/moby/moby/pkg/namesgenerator"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -27,6 +26,7 @@ type Config struct {
 	Stats         *stats.Stats
 	PeekSizeBytes int64
 	PeekTimeout   time.Duration
+	Namer         func() string
 }
 
 func New(config Config) *Pool {
@@ -59,7 +59,7 @@ func (p *Pool) Run() {
 func (p *Pool) work() {
 	for cli := range p.clients {
 		worker := worker.Worker{
-			Name:   namesgenerator.GetRandomName(0),
+			Name:   p.Namer(),
 			Client: cli,
 			Stats:  p.Stats,
 		}

@@ -6,6 +6,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
+	"roob.re/refractor/names"
 	"roob.re/refractor/pool"
 	"roob.re/refractor/provider/providers"
 	"roob.re/refractor/provider/types"
@@ -95,6 +96,7 @@ func New(configFile io.Reader) (*Server, error) {
 			PeekTimeout:   config.PeekTimeout,
 			PeekSizeBytes: int64(config.PeekSizeMiBs * 1024 * 1024),
 			Workers:       config.Workers,
+			Namer:         names.Haiku,
 			Stats: stats.New(stats.Config{
 				AbsoluteGoodThroughput: config.GoodThroughputMiBs * 1024 * 1024,
 				NumWorkers:             config.Workers,
