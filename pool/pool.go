@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"roob.re/refractor/client"
+	"roob.re/refractor/names"
 	"roob.re/refractor/pool/peeker"
 	"roob.re/refractor/provider/types"
 	"roob.re/refractor/stats"
@@ -17,27 +18,38 @@ import (
 
 type Pool struct {
 	Config
-	peeker   peeker.Peeker
+	stats  *stats.Stats
+	peeker peeker.Peeker
+	namer  func() string
+
 	clients  chan *client.Client
 	requests chan client.Request
 }
 
 type Config struct {
-	Retries       int
-	Workers       int
-	Stats         *stats.Stats
-	PeekSizeBytes int64
-	PeekTimeout   time.Duration
-	Namer         func() string
+	// Retries controls how many times a request is re-enqueued after a retryable error occurs.
+	// Errors are considered retryable if they occur before writing anything to the client.
+	Retries int `yaml:"retries"`
+	// Workers is the amount of workers that will serve requests in parallel. It should be higher that the amount of
+	// expected connections to refractor, otherwise requests will be serialized.
+	Workers int `yaml:"workers"`
+
+	// PeekSizeMiBs is the amount of bytes to peek before starting to feed the response back to the client.
+	// If PeekSizeMiBs are not transferred within PeekTimeout, the request is aborted and requeued to another mirror.
+	PeekSizeMiBs int64 `yaml:"peekSizeMiBs"`
+	// PeekTimeout is the amount of time to give for PeekSizeBytes to be read before switching to another mirror.
+	PeekTimeout time.Duration `yaml:"peekTimeout"`
 }
 
-func New(config Config) *Pool {
+func New(config Config, stats *stats.Stats) *Pool {
 	return &Pool{
 		Config:   config,
+		stats:    stats,
+		namer:    names.Haiku,
 		clients:  make(chan *client.Client),
 		requests: make(chan client.Request),
 		peeker: peeker.Peeker{
-			SizeBytes: config.PeekSizeBytes,
+			SizeBytes: config.PeekSizeMiBs * 1024 * 1024,
 			Timeout:   config.PeekTimeout,
 		},
 	}
@@ -65,12 +77,12 @@ func (p *Pool) Run() {
 func (p *Pool) work() {
 	for cli := range p.clients {
 		worker := worker.Worker{
-			Name:   p.Namer(),
 			Client: cli,
-			Stats:  p.Stats,
+			Stats:  p.stats,
+			Name:   p.namer(),
 		}
 		log.Error(worker.Work(p.requests))
-		p.Stats.Remove(worker.String())
+		p.stats.Remove(worker.String())
 	}
 }
 

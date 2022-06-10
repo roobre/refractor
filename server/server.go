@@ -6,7 +6,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
-	"roob.re/refractor/names"
 	"roob.re/refractor/pool"
 	"roob.re/refractor/provider/providers"
 	"roob.re/refractor/provider/types"
@@ -15,23 +14,8 @@ import (
 )
 
 type Config struct {
-	// Workers is the amount of workers that will serve requests in parallel. It should be higher that the amount of
-	// expected connections to refractor, otherwise requests will be serialized.
-	Workers int `yaml:"workers"`
-
-	// Retries controls how many times a request is re-enqueued after a retryable error occurs.
-	// Errors are considered retryable if they occur before writing anything to the client.
-	Retries int `yaml:"retries"`
-
-	// GoodThroughputMiBs is an absolute value, in MiB/s, of what is considered good throughput. Workers that perform
-	// above this throughput will never get rotated out of the worker pool, even if they are in the last 2 positions.
-	GoodThroughputMiBs float64 `yaml:"goodThroughputMiBs"`
-
-	// PeekSizeBytes is the amount of bytes to peek before starting to feed the response back to the client.
-	// If PeekSizeBytes are not transferred within PeekTimeout, the request is aborted and requeued to another mirror.
-	PeekSizeMiBs float64 `yaml:"peekSizeMiBs"`
-	// PeekTimeout is the amount of time to give for PeekSizeBytes to be read before switching to another mirror.
-	PeekTimeout time.Duration `yaml:"peekTimeout"`
+	Pool               pool.Config `yaml:",inline"`
+	GoodThroughputMiBs float64     `yaml:"goodThroughputMiBs"`
 
 	// Provider contains the name of the chosen provider, and provider-specific config.
 	Provider map[string]yaml.Node
@@ -73,41 +57,36 @@ func New(configFile io.Reader) (*Server, error) {
 			return nil, fmt.Errorf("creating provider %q: %w", pName, err)
 		}
 
+		log.Infof("Using provider %q", pName)
+
 		break
 	}
 
-	if config.PeekSizeMiBs == 0 {
+	if config.Pool.PeekSizeMiBs == 0 {
 		log.Infof("Defaulting PeekSizeMiBs to %.1f", defaultPeekSizeMiBs)
-		config.PeekSizeMiBs = defaultPeekSizeMiBs
+		config.Pool.PeekSizeMiBs = defaultPeekSizeMiBs
 	}
 
-	if config.PeekTimeout == 0 {
+	if config.Pool.PeekTimeout == 0 {
 		log.Infof("Defaulting PeekTimeout to %s", defaultPeekTimeout)
-		config.PeekTimeout = defaultPeekTimeout
+		config.Pool.PeekTimeout = defaultPeekTimeout
 	}
 
-	if config.Retries == 0 {
+	if config.Pool.Retries == 0 {
 		log.Infof("Defaulting Retries to %d", defaultRetries)
-		config.Retries = defaultRetries
+		config.Pool.Retries = defaultRetries
 	}
 
-	s := &Server{
-		pool: pool.New(pool.Config{
-			PeekTimeout:   config.PeekTimeout,
-			PeekSizeBytes: int64(config.PeekSizeMiBs * 1024 * 1024),
-			Workers:       config.Workers,
-			Retries:       config.Retries,
-			Namer:         names.Haiku,
-			Stats: stats.New(stats.Config{
+	return &Server{
+		provider: provider,
+		pool: pool.New(
+			config.Pool,
+			stats.New(stats.Config{
 				AbsoluteGoodThroughput: config.GoodThroughputMiBs * 1024 * 1024,
-				NumWorkers:             config.Workers,
+				NumWorkers:             config.Pool.Workers,
 			}),
-		}),
-	}
-
-	s.provider = provider
-
-	return s, nil
+		),
+	}, nil
 }
 
 func (s *Server) Run(address string) error {
