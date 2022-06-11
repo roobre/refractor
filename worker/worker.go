@@ -3,10 +3,8 @@ package worker
 import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 	"roob.re/refractor/client"
 	"roob.re/refractor/stats"
-	"strings"
 	"time"
 )
 
@@ -44,13 +42,6 @@ func (w Worker) Work(requests chan client.Request) error {
 			}()
 
 			return fmt.Errorf("worker %s returned error for %s, sacrificing: %v", w.String(), req.Path, response.Error)
-		}
-
-		if code := response.HTTPResponse.StatusCode; code != http.StatusOK {
-			// TODO: Hack: Archlinux mirrors are somehow expected to return 404 for .sig files.
-			if !strings.HasSuffix(req.Path, ".sig") {
-				log.Warnf("Worker %s returned %d for %s", w.String(), code, req.Path)
-			}
 		}
 
 		response.Done = func(written int64) {
