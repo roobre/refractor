@@ -137,7 +137,7 @@ func (p *Pool) tryRequest(r *http.Request, rw http.ResponseWriter) (error, bool)
 	response.Done(written)
 
 	if err != nil {
-		err = fmt.Errorf("writing request %s%s to client: %w", response.Worker, request.Path, err)
+		err = fmt.Errorf("writing %s%s to client: %w", response.Worker, request.Path, err)
 		return err, written == 0
 	}
 
@@ -147,7 +147,7 @@ func (p *Pool) tryRequest(r *http.Request, rw http.ResponseWriter) (error, bool)
 func (p *Pool) writeResponse(response *http.Response, rw http.ResponseWriter) (int64, error) {
 	// Peek body before writing headers
 	peeked, err := p.peeker.Peek(response.Body)
-	if err != nil && !errors.Is(err, io.EOF) {
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return 0, fmt.Errorf("peeking response body: %w", err)
 	}
 

@@ -1,8 +1,8 @@
 package peeker
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 )
@@ -21,37 +21,31 @@ type peekResult struct {
 
 // Peek attempts to get a few bytes from the body within some time.
 func (p *Peeker) Peek(body io.Reader) ([]byte, error) {
-	result := make(chan peekResult)
-	timer := time.NewTimer(p.Timeout)
-	defer timer.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), p.Timeout)
+	defer cancel()
 
-	go p.readPeek(body, result)
+	readChan := p.readContext(ctx, body)
 
 	select {
-	case <-timer.C:
-		return nil, fmt.Errorf("could not read %.2fMiB within %s: %w", float64(p.SizeBytes)/1024/1024, p.Timeout.String(), ErrPeekTimeout)
-	case result := <-result:
+	case result := <-readChan:
 		return result.buf, result.err
+	case <-ctx.Done():
+		return nil, ErrPeekTimeout
 	}
 }
 
-func (p *Peeker) readPeek(body io.Reader, resultChan chan peekResult) {
-	result := peekResult{}
+func (p *Peeker) readContext(ctx context.Context, body io.Reader) chan peekResult {
+	res := make(chan peekResult)
 
-	read := 0
-	for {
-		readBuf := make([]byte, p.SizeBytes-int64(read))
-		read, result.err = body.Read(readBuf)
-		result.buf = append(result.buf, readBuf[:read]...)
+	go func() {
+		result := peekResult{}
+		result.buf, result.err = io.ReadAll(io.LimitReader(body, p.SizeBytes))
 
-		if result.err != nil || int64(len(result.buf)) >= p.SizeBytes {
-			break
+		select {
+		case <-ctx.Done():
+		case res <- result:
 		}
-	}
+	}()
 
-	select {
-	case resultChan <- result:
-	default:
-		return
-	}
+	return res
 }
