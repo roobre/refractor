@@ -6,6 +6,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
+	"roob.re/refractor/client"
 	"roob.re/refractor/pool"
 	"roob.re/refractor/provider/providers"
 	"roob.re/refractor/provider/types"
@@ -14,8 +15,10 @@ import (
 )
 
 type Config struct {
-	Pool               pool.Config `yaml:",inline"`
-	GoodThroughputMiBs float64     `yaml:"goodThroughputMiBs"`
+	Pool   pool.Config   `yaml:",inline"`
+	Client client.Config `yaml:",inline"`
+
+	GoodThroughputMiBs float64 `yaml:"goodThroughputMiBs"`
 
 	// Provider contains the name of the chosen provider, and provider-specific config.
 	Provider map[string]yaml.Node

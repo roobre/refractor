@@ -63,7 +63,7 @@ func (p *Pool) Feed(provider types.Provider) {
 			log.Errorf("Provided returned an error: %v", err)
 			time.Sleep(10 * time.Second)
 		}
-		p.clients <- client.NewClient(url)
+		p.clients <- client.NewClient(client.Config{}, url)
 	}
 }
 

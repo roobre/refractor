@@ -3,6 +3,9 @@ goodThroughputMiBs: 10
 peekSizeMiBs: 1
 peekTimeout: 1s
 
+preDownloadTimeout: 500ms
+downloadTimeout: 1m
+
 provider:
   archlinux:
     maxScore: 5

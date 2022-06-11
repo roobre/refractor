@@ -19,6 +19,23 @@ type Client struct {
 	baseUrl    string
 }
 
+type Config struct {
+	PreDownloadTimeout time.Duration `yaml:"preDownloadTimeout"`
+	DownloadTimeout    time.Duration `yaml:"downloadTimeout"`
+}
+
+func (c Config) WithDefaults() Config {
+	if c.PreDownloadTimeout == 0 {
+		c.PreDownloadTimeout = 3 * time.Second
+	}
+
+	if c.DownloadTimeout == 0 {
+		c.DownloadTimeout = 2 * time.Minute
+	}
+
+	return c
+}
+
 type Request struct {
 	Path         string
 	Header       http.Header
@@ -32,11 +49,11 @@ type Response struct {
 	Done         func(written int64)
 }
 
-func NewClient(baseUrl string) *Client {
-	// TODO: Make all these timeouts configurable
-	// Ref: https://blog.cloudflare.com/content/images/2016/06/Timeouts-002.png
+func NewClient(c Config, baseUrl string) *Client {
+	c = c.WithDefaults()
+
 	timeoutDialer := &net.Dialer{
-		Timeout: 2 * time.Second,
+		Timeout: c.PreDownloadTimeout,
 	}
 
 	resolver := &dnscache.Resolver{}
@@ -64,15 +81,15 @@ func NewClient(baseUrl string) *Client {
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dialContext,
 		MaxIdleConns:          10,
-		ResponseHeaderTimeout: 1 * time.Second,
-		IdleConnTimeout:       1 * time.Second,
-		TLSHandshakeTimeout:   1 * time.Second,
+		ResponseHeaderTimeout: c.PreDownloadTimeout,
+		IdleConnTimeout:       c.PreDownloadTimeout,
+		TLSHandshakeTimeout:   c.PreDownloadTimeout,
 	}
 
 	return &Client{
 		HTTPClient: &http.Client{
 			Transport: transport,
-			Timeout:   2 * time.Minute,
+			Timeout:   c.DownloadTimeout,
 		},
 		baseUrl:  baseUrl,
 		resolver: resolver,
