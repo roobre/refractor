@@ -1,13 +1,14 @@
 workers: 8
 goodThroughputMiBs: 10
-peekSizeMiBs: 2
-peekTimeout: 2s
+peekSizeMiBs: 1
+peekTimeout: 1s
 
 provider:
   archlinux:
     maxScore: 5
     countries:
       - ES
-      - IT
       - FR
+      - GB
+      - DE
       - PT
