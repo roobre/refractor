@@ -76,7 +76,7 @@ func (s *Stats) Update(name string, sample Sample) {
 		return
 	}
 
-	log.Infof("Recording sample of %s for %s", sample.String(), name)
+	log.Debugf("Recording sample of %s for %s", sample.String(), name)
 
 	defer func() {
 		go s.report()
@@ -136,6 +136,7 @@ func (s *Stats) report() {
 	for _, worker := range list {
 		statsStr += fmt.Sprintf("\n%.2fMiB/s\t%s", worker.throughput/1024/1024, worker.name)
 	}
+	log.Info(statsStr)
 }
 
 func (s *Stats) shouldReport() bool {

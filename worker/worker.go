@@ -45,10 +45,12 @@ func (w Worker) Work(requests chan client.Request) error {
 		}
 
 		response.Done = func(written int64) {
-			go w.Stats.Update(w.String(), stats.Sample{
+			sample := stats.Sample{
 				Bytes:    written,
 				Duration: time.Since(start),
-			})
+			}
+			log.Infof("%s %s:%s", sample.String(), w.Name, w.Client.URL(req.Path))
+			go w.Stats.Update(w.String(), sample)
 		}
 
 		req.ResponseChan <- response
