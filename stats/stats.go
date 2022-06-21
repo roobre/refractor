@@ -132,8 +132,9 @@ func (s *Stats) report() {
 	}
 
 	list := s.workerList()
-	for position, worker := range list {
-		log.Infof("Worker #%d (%s): %.2f MiB/s", position+1, worker.name, worker.throughput/1024/1024)
+	statsStr := "Worker stats:"
+	for _, worker := range list {
+		statsStr += fmt.Sprintf("\n%.2fMiB/s\t%s", worker.throughput/1024/1024, worker.name)
 	}
 }
 
