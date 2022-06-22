@@ -17,8 +17,7 @@ import (
 type Config struct {
 	Pool   pool.Config   `yaml:",inline"`
 	Client client.Config `yaml:",inline"`
-
-	GoodThroughputMiBs float64 `yaml:"goodThroughputMiBs"`
+	Stats  stats.Config  `yaml:",inline"`
 
 	// Provider contains the name of the chosen provider, and provider-specific config.
 	Provider map[string]yaml.Node
@@ -41,6 +40,9 @@ func New(configFile io.Reader) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unmarshalling config: %w", err)
 	}
+
+	// Both pool and stats share the number of workers, as a hack we use pool.Config as the source of truth.
+	config.Stats.NumWorkers = config.Pool.Workers
 
 	var provider types.Provider
 	for pName, yamlConfig := range config.Provider {
@@ -84,10 +86,7 @@ func New(configFile io.Reader) (*Server, error) {
 		provider: provider,
 		pool: pool.New(
 			config.Pool,
-			stats.New(stats.Config{
-				AbsoluteGoodThroughput: config.GoodThroughputMiBs * 1024 * 1024,
-				NumWorkers:             config.Pool.Workers,
-			}),
+			stats.New(config.Stats),
 		),
 	}, nil
 }

@@ -12,7 +12,7 @@ const (
 	minSampleBytes = 1024
 	// Requests below minSampleBytes will not be counted UNLESS they took more than minDurationForMinBytes
 	minDurationForMinBytes = 1 * time.Second
-	minSampleDuration      = 200 * time.Millisecond
+	minSampleDuration      = 50 * time.Millisecond
 	maxSamples             = 20.0
 )
 
@@ -24,8 +24,26 @@ type Stats struct {
 }
 
 type Config struct {
-	AbsoluteGoodThroughput float64
-	NumWorkers             int
+	NumWorkers    int `yaml:"-"`
+	NumTopWorkers int `yaml:"topWorkers"`
+
+	GoodThroughputMiBs float64 `yaml:"goodThroughputMiBs"`
+}
+
+func (c Config) WithDefaults() Config {
+	if c.NumWorkers == 0 {
+		c.NumWorkers = 8
+	}
+
+	if c.NumTopWorkers == 0 {
+		c.NumTopWorkers = c.NumWorkers * 3 / 4
+	}
+
+	if c.GoodThroughputMiBs == 0 {
+		c.GoodThroughputMiBs = 10
+	}
+
+	return c
 }
 
 type Sample struct {
@@ -53,7 +71,7 @@ type namedEntry struct {
 
 func New(c Config) *Stats {
 	return &Stats{
-		Config:  c,
+		Config:  c.WithDefaults(),
 		workers: map[string]workerEntry{},
 	}
 }
@@ -67,12 +85,12 @@ func (s *Stats) Remove(name string) {
 
 func (s *Stats) Update(name string, sample Sample) {
 	if sample.Bytes < minSampleBytes && sample.Duration < minDurationForMinBytes {
-		log.Debugf("Not enough bytes for a meaningful throughput sample, dropping (%d)", sample.Bytes)
+		log.Infof("Dropping sample for %s, not enough bytes to measure (%d)", name, sample.Bytes)
 		return
 	}
 
 	if sample.Duration < minSampleDuration {
-		log.Debugf("Skipping stats recording for short duration %v", sample.Duration)
+		log.Infof("Dropping sample for %s, not transaction too short to measure (%v)", name, sample.Duration)
 		return
 	}
 
@@ -101,8 +119,8 @@ func (s *Stats) Update(name string, sample Sample) {
 func (s *Stats) GoodPerformer(name string) bool {
 	entries := s.workerList()
 
-	if len(entries) < 3 {
-		log.Debugf("Stats collected for less than 2 workers, cannot emit a judgement yet")
+	if len(entries) <= s.NumTopWorkers {
+		log.Debugf("Less than %d workers ranked, cannot evict any yet", s.NumWorkers)
 		return true
 	}
 
@@ -117,13 +135,13 @@ func (s *Stats) GoodPerformer(name string) bool {
 
 	log.Debugf("Worker %s is in position %d/%d", name, position+1, len(s.workers))
 
-	if entries[position].throughput > s.AbsoluteGoodThroughput {
+	if entries[position].throughput > s.GoodThroughputMiBs*1024*1024 {
 		log.Debugf("Worker %s has an absolutely good throughput", name)
 		return true
 	}
 
 	// We're good performers if we're earlier than the last two positions
-	return position <= s.NumWorkers-3
+	return position < s.NumTopWorkers
 }
 
 func (s *Stats) report() {

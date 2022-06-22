@@ -27,7 +27,7 @@ func (w Worker) Work(requests chan client.Request) error {
 				requests <- req
 			}()
 
-			return fmt.Errorf("worker %s is not a good performer, evicting and requeuing request", w.Name)
+			return fmt.Errorf("worker %s is not a good performer, evicting and requeuing request", w.String())
 		}
 
 		log.Infof("Requesting %s:%s", w.Name, w.Client.URL(req.Path))
