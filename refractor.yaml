@@ -1,10 +1,15 @@
-workers: 8
-goodThroughputMiBs: 10
-peekSizeMiBs: 1
-peekTimeout: 1s
+# Number of workers to start. This controls the amount of parallel chunk downloads.
+# This should be set reasonably higher than the number of pacman parallel downloads.
+#workers: 8
 
-preDownloadTimeout: 500ms
-downloadTimeout: 1m
+# Number of top workers. Mirrors that are ranked below this number in throughput will be rotated out of the pool
+# and replaced with new random mirrors.
+#topWorkers: 4
+
+# Throughput considered "good" regardless of worker rank. Mirrors that are currently transmitting data at a
+# rate higher than this are never rotated out, regardless of their rank.
+# It should be set to a value _smaller_ than `(your ISP bandwidth in MiB/s)/(workers)`.
+goodThroughputMiBs: 4
 
 provider:
   archlinux:

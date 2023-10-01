@@ -2,18 +2,20 @@ package stats
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 )
 
 const (
-	minSampleBytes = 1024
-	// Requests below minSampleBytes will not be counted UNLESS they took more than minDurationForMinBytes
-	minDurationForMinBytes = 1 * time.Second
-	minSampleDuration      = 50 * time.Millisecond
-	maxSamples             = 20.0
+	// Requests that transfer less than minSampleBytes AND take less than maxDurationForMinBytes will not
+  // be taken into account for ranking.
+	minSampleBytes = 512 << 10 // 512KiB
+	maxDurationForMinBytes = 1 * time.Second
+
+	maxSamples        = 15.0
 )
 
 type Stats struct {
@@ -24,7 +26,7 @@ type Stats struct {
 }
 
 type Config struct {
-	NumWorkers    int `yaml:"-"`
+	NumWorkers    int `yaml:"workers"`
 	NumTopWorkers int `yaml:"topWorkers"`
 
 	GoodThroughputMiBs float64 `yaml:"goodThroughputMiBs"`
@@ -40,14 +42,14 @@ func (c Config) WithDefaults() Config {
 	}
 
 	if c.GoodThroughputMiBs == 0 {
-		c.GoodThroughputMiBs = 10
+		c.GoodThroughputMiBs = 2
 	}
 
 	return c
 }
 
 type Sample struct {
-	Bytes    int64
+	Bytes    uint64
 	Duration time.Duration
 }
 
@@ -84,13 +86,8 @@ func (s *Stats) Remove(name string) {
 }
 
 func (s *Stats) Update(name string, sample Sample) {
-	if sample.Bytes < minSampleBytes && sample.Duration < minDurationForMinBytes {
-		log.Infof("Dropping sample for %s, not enough bytes to measure (%d)", name, sample.Bytes)
-		return
-	}
-
-	if sample.Duration < minSampleDuration {
-		log.Infof("Dropping sample for %s, not transaction too short to measure (%v)", name, sample.Duration)
+	if sample.Bytes < minSampleBytes && sample.Duration < maxDurationForMinBytes {
+		log.Tracef("Dropping sample for %s, not significant enough (%d bytes in %v)", name, sample.Bytes, sample.Duration)
 		return
 	}
 
