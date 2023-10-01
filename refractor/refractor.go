@@ -150,23 +150,33 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 		start = end + 1 // Server returns [start-end], both inclusive, so next request should start on end + 1.
 	}
 
+	// Defer fully consuming and closing all response channels to avoid leaking buffers and workers, in the event an error occurs.
+	defer func() {
+		for _, rc := range responseChannels {
+			re := <-rc
+			if re.response != nil {
+				re.response.Body.Close()
+			}
+		}
+	}()
+
 	rw.Header().Add("content-length", fmt.Sprint(br.response.ContentLength))
 	for _, rc := range responseChannels {
-		responseErr := <-rc
-		if responseErr.err != nil {
+		re := <-rc
+		if re.err != nil {
 			log.Errorf("Reading resopnse from channel: %v", err)
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		_, err := io.Copy(rw, responseErr.response.Body)
+		_, err := io.Copy(rw, re.response.Body)
 		if err != nil {
 			log.Errorf("Writing response chunk: %v", err)
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		responseErr.response.Body.Close()
+		re.response.Body.Close()
 	}
 }
 
