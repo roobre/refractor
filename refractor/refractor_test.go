@@ -30,6 +30,16 @@ func (j *requestJournal) Log(r *http.Request) {
 	j.entries = append(j.entries, r)
 }
 
+type slowWriter struct {
+	http.ResponseWriter
+	delay time.Duration
+}
+
+func (s slowWriter) Write(p []byte) (int, error) {
+	time.Sleep(s.delay)
+	return s.ResponseWriter.Write(p)
+}
+
 func Test_Refractor(t *testing.T) {
 	journal := requestJournal{}
 
@@ -43,12 +53,18 @@ func Test_Refractor(t *testing.T) {
 		s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			journal.Log(r)
 
+			reader := io.ReadSeeker(bytes.NewReader(rubbish))
+
 			if mrand.Float32() < 0.2 {
 				rw.WriteHeader(http.StatusGatewayTimeout)
 				return
 			}
 
-			http.ServeContent(rw, r, "rubbish", time.Now(), bytes.NewReader(rubbish))
+			if mrand.Float32() < 0.2 {
+				rw = slowWriter{ResponseWriter: rw, delay: time.Second}
+			}
+
+			http.ServeContent(rw, r, "rubbish", time.Now(), reader)
 		}))
 
 		mirrors[i] = s.URL
@@ -69,7 +85,10 @@ func Test_Refractor(t *testing.T) {
 		}
 	}()
 
-	r := refractor.New(refractor.Config{}, pool)
+	r := refractor.New(refractor.Config{
+		ChunkTimeout: 500 * time.Millisecond, // Very short timeout to make test faster.
+		Retries:      10,                     // Make very unlikely for the test to fail due to unlucky random timeouts/errors.
+	}, pool)
 	server := httptest.NewServer(r)
 
 	response, err := http.Get(server.URL + "/rubbish")
