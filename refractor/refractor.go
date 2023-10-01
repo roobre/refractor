@@ -24,20 +24,20 @@ type Refractor struct {
 }
 
 type Config struct {
-	ChunkSize    int64
-	ChunkTimeout time.Duration
-	Retries      int
+	ChunkSizeMiBs int           `yaml:"chunkSizeMiBs"`
+	ChunkTimeout  time.Duration `yaml:"chunkTimeout"`
+	Retries       int           `yaml:"retries"`
 }
 
 func (c Config) WithDefaults() Config {
 	const (
-		defaultChunkSize    = 4 << 20 // 4 MiB.
+		defaultChunkSize    = 4
 		defaultChunkTimeout = 5 * time.Second
 		defaultRetries      = 5
 	)
 
-	if c.ChunkSize == 0 {
-		c.ChunkSize = defaultChunkSize
+	if c.ChunkSizeMiBs == 0 {
+		c.ChunkSizeMiBs = defaultChunkSize
 	}
 
 	if c.ChunkTimeout == 0 {
@@ -130,7 +130,7 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 	size := br.response.ContentLength
 	start := int64(0)
 	for start < size {
-		end := start + rf.ChunkSize
+		end := start + int64(rf.ChunkSizeMiBs)<<20
 		if end > size {
 			end = size
 		}
