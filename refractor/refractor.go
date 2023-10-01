@@ -26,12 +26,14 @@ type Refractor struct {
 type Config struct {
 	ChunkSize    int64
 	ChunkTimeout time.Duration
+	Retries      int
 }
 
 func (c Config) WithDefaults() Config {
 	const (
 		defaultChunkSize    = 4 << 20 // 4 MiB.
 		defaultChunkTimeout = 5 * time.Second
+		defaultRetries      = 5
 	)
 
 	if c.ChunkSize == 0 {
@@ -40,6 +42,10 @@ func (c Config) WithDefaults() Config {
 
 	if c.ChunkTimeout == 0 {
 		c.ChunkTimeout = defaultChunkTimeout
+	}
+
+	if c.Retries == 0 {
+		c.Retries = defaultRetries
 	}
 
 	return c
@@ -167,7 +173,7 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 func (rf *Refractor) retryRequest(r *http.Request) chan responseErr {
 	respChan := make(chan responseErr)
 	go func() {
-		const retries = 5
+		retries := rf.Retries
 		try := 0
 		for {
 			try++
@@ -230,9 +236,11 @@ func (rf *Refractor) request(r *http.Request) (*http.Response, error) {
 	buf.Reset()
 
 	body := response.Body
+
 	// Asynchronously wait for context and close body if copy takes too long.
 	go func() {
 		<-ctx.Done()
+
 		err := body.Close()
 		if err != nil {
 			log.Errorf("Closing body due to context timeout: %v", err)
