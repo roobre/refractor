@@ -106,6 +106,12 @@ func (rf *Refractor) handlePlain(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for k, vs := range br.response.Header {
+		for _, v := range vs {
+			rw.Header().Add(k, v)
+		}
+	}
+
 	_, err = io.Copy(rw, br.response.Body)
 	if err != nil {
 		log.Errorf("writing GET body: %v", err)
@@ -160,7 +166,11 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	rw.Header().Add("content-length", fmt.Sprint(br.response.ContentLength))
+	for k, vs := range br.response.Header {
+		for _, v := range vs {
+			rw.Header().Add(k, v)
+		}
+	}
 	for _, rc := range responseChannels {
 		re := <-rc
 		if re.err != nil {
