@@ -156,7 +156,8 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 		start = end + 1 // Server returns [start-end], both inclusive, so next request should start on end + 1.
 	}
 
-	// Defer fully consuming and closing all response channels to avoid leaking buffers and workers, in the event an error occurs.
+	// Defer fully consuming and closing all response channels to avoid leaking buffers and workers, in the event an
+	// error occurs.
 	defer func() {
 		for _, rc := range responseChannels {
 			re := <-rc
@@ -171,6 +172,8 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 			rw.Header().Add(k, v)
 		}
 	}
+
+	written := int64(0)
 	for _, rc := range responseChannels {
 		re := <-rc
 		if re.err != nil {
@@ -179,14 +182,21 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err := io.Copy(rw, re.response.Body)
+		n, err := io.Copy(rw, re.response.Body)
 		if err != nil {
 			log.Errorf("Writing response chunk: %v", err)
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
+		written += n
+
 		re.response.Body.Close()
+	}
+
+	if written != br.response.ContentLength {
+		log.Errorf("Wrote %d bytes of %d expected for %s", written, br.response.ContentLength, url)
+		return
 	}
 }
 
