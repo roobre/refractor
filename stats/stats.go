@@ -34,7 +34,7 @@ type Config struct {
 
 func (c Config) WithDefaults() Config {
 	if c.NumWorkers == 0 {
-		c.NumWorkers = 8
+		c.NumWorkers = 12
 	}
 
 	if c.NumTopWorkers == 0 {
