@@ -17,8 +17,8 @@ import (
 )
 
 type Config struct {
-	Stats stats.Config `yaml:",inline"`
-  Refractor refractor.Config `yaml:",inline"`
+	Stats     stats.Config     `yaml:",inline"`
+	Refractor refractor.Config `yaml:",inline"`
 
 	// Provider contains the name of the chosen provider, and provider-specific config.
 	Provider map[string]yaml.Node
@@ -67,14 +67,14 @@ func New(configFile io.Reader) (*Server, error) {
 	return &Server{
 		pool: p,
 		refractor: refractor.New(
-      config.Refractor,
+			config.Refractor,
 			p,
 		),
 	}, nil
 }
 
 func (s *Server) Run(address string) error {
-  ctx := context.Background()
+	ctx := context.Background()
 
 	go s.pool.Start(ctx)
 
