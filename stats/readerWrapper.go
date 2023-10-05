@@ -2,20 +2,20 @@ package stats
 
 import (
 	"io"
-	"sync"
 )
 
 // ReaderWrapper wraps an io.Reader and calls OnDone with the total number of bytes read from the underlying reader
-// when the underlying reader returns the first error, that can be EOF, or when it gets Close()d.
-// OnDone is called at most once.
-// If the underlying reader implements io.Closer, ReaderWrapper will forward calls to Close() to it. Otherwise, the
-// Close() operation always returns nil.
+// as an argument.
+// OnDone is called at most once when the underlying reader returns the first error, that can be EOF, or when it get
+// Close()d.
+// If the underlying reader also implements io.Closer, ReaderWrapper.Close() will also call Close() on it. Otherwise,
+// the Close() operation always returns nil.
 type ReaderWrapper struct {
 	Underlying io.Reader
 	OnDone     func(totalRead uint64)
 
-	read uint64
-	once sync.Once
+	read     uint64
+	reported bool
 }
 
 func (w *ReaderWrapper) Read(p []byte) (n int, err error) {
@@ -39,7 +39,10 @@ func (w *ReaderWrapper) Close() (err error) {
 }
 
 func (w *ReaderWrapper) report() {
-	w.once.Do(func() {
-		w.OnDone(w.read)
-	})
+	if w.reported {
+		return
+	}
+
+	w.reported = true
+	w.OnDone(w.read)
 }
