@@ -203,6 +203,8 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 func (rf *Refractor) retryRequest(r *http.Request) chan responseErr {
 	respChan := make(chan responseErr)
 	go func() {
+		defer close(respChan)
+
 		retries := rf.Retries
 		try := 0
 		for {
