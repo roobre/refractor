@@ -259,6 +259,10 @@ func (rf *Refractor) request(r *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("got status %d, expected %d", response.StatusCode, expectedStatus)
 	}
 
+	if response.ContentLength == -1 {
+		return nil, fmt.Errorf("got -1 content length for response")
+	}
+
 	// If this is a HEAD request there is no need to copy the body.
 	if r.Method == http.MethodHead {
 		return response, nil
@@ -284,6 +288,7 @@ func (rf *Refractor) request(r *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
+	// Check we read the expected length.
 	if n != response.ContentLength {
 		return nil, fmt.Errorf("expected to read bytes %d but read %d instead", response.ContentLength, n)
 	}
