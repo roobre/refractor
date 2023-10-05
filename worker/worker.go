@@ -52,8 +52,9 @@ func (w Worker) Work(requests chan RequestResponse) error {
 
 	for req := range requests {
 		response, err := func(*http.Request) (*http.Response, error) {
-			if !w.Stats.GoodPerformer(w.String()) {
-				return nil, ErrSlowMirror
+			throughput, goodPerformer := w.Stats.Stats(w.Name)
+			if !goodPerformer {
+				return nil, fmt.Errorf("%w: %.2fMiB/s", ErrSlowMirror, throughput/1024/1024)
 			}
 
 			httpReq, err := w.toMirror(req.Request)
