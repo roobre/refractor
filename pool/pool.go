@@ -14,7 +14,6 @@ import (
 )
 
 type Pool struct {
-	workers  int
 	stats    *stats.Stats
 	provider types.Provider
 	namer    func() string
