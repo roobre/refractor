@@ -1,14 +1,14 @@
 # 🪞 Refractor
 
-Refractor is linux mirror load-balancer, which parallelizes requests between an extremely dynamic pool of mirrors. Mirrors in the pool are constantly monitored for throughput, and slowest mirrors are continuously rotated out of the pool and replaced by new ones.
+Refractor is linux mirror load-balancer, which parallelizes requests between an extremely dynamic pool of mirrors. Mirrors in the pool are constantly monitored for throughput, and slowest mirrors are continuously rotated out of the pool and replaced by new ones obtained at random.
 
 ## Working principle
 
 The core of Refractor is a pool of workers, to which HTTP requests are routed. A worker draws a random mirror from a list, and proxies the response to the user.
 
-Refractor aims to work in a stateless, self-balancing way. It tries to achieve it by picking up mirrors from a large list (referred as a provider), and routing requests to them while measuring how those perform. If a mirror is among the bottom N performers, it gets rotated out. Mirrors that fail to complete requests in a given time are also immediately rotated, while mirrors that perform above a given threshold are never rotated out even if the rest perform better. After a certain amount of requests, this should stabilize in a pool of fast mirrors.
+Refractor aims to work in a stateless, self-balancing way. It tries to achieve this by picking up mirrors from a large list (referred as a Provider), and routing requests to them while measuring how the mirrors perform. If a mirror is among the bottom N performers, it gets rotated out of the pool. Mirrors that fail to complete requests in a given time are also immediately rotated out, while mirrors that perform above a given threshold are never rotated out even if they are among the bottom performers. After a certain amount of requests, this should stabilize in a pool of fast mirrors.
 
-In an attempt to maximize downlink and speed up the rotation of slow mirrors, requests are split up in several chunks of a configurable size, typically a few megabytes, that are themselves routed to different mirrors. If a mirror returns an error for a chunk, or fails to download the chunk in time, the mirror that failed is immediately rotated out and the piece is re-queued.
+In an attempt to maximize downlink and speed up the rotation of slow mirrors, requests are split up in several chunks of a configurable size, typically a few megabytes, that are themselves routed to different mirrors. Chunks are buffered in memory and served to clients in a pipelined fashion. If a mirror returns an error for a chunk, or fails to download the chunk in time, the mirror that failed is immediately rotated out and the chunk is re-queued to another mirror.
 
 Mirror throughput is measured using a rolling average, so if a mirror performed well in the past but doesn't anymore, for example because it is currently dealing with a large amount of traffic, it gets rotated out.
 
