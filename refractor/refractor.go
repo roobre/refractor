@@ -126,7 +126,6 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	headReq.Header.Add("accept-encoding", "identity") // Prevent server from gzipping headResponse.
 	headResponse, err := rf.retryRequest(headReq)
 	if err != nil {
 		log.Errorf("HEAD request to %s did not succeed: %v", url, err)
@@ -138,6 +137,13 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 		for _, v := range vs {
 			rw.Header().Add(k, v)
 		}
+	}
+
+	requests, err := rf.split(url, headResponse.ContentLength)
+	if err != nil {
+		log.Errorf("Splitting request: %v", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	// This goroutine runs in parallel with the main request loop, writing bodies to the client and reporting back
@@ -159,31 +165,10 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 		close(errChan)
 	}()
 
-	// Run main loop as an anonymous function to preserve semantics of defer and early return.
 	func() {
-		defer close(bodyChan) // Ensure bodyChan is closed even if we return early.
+		defer close(bodyChan) // Ensure bodyChan is break the loop early.
 
-		size := headResponse.ContentLength
-		start := int64(0)
-		for start < size {
-			end := start + int64(rf.ChunkSizeMiBs)<<20
-			if end > size {
-				end = size
-			}
-
-			req, err := http.NewRequest(http.MethodGet, url, nil)
-			if err != nil {
-				log.Errorf("building ranged retryRequest for %q: %v", url, err)
-				rw.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			req.Header.Add("range", fmt.Sprintf("bytes=%d-%d", start, end))
-			// Prevent servers from gzipping request, as that would break ranges across servers.
-			// This actually does mirrors a favor, preventing them from spending CPU cycles on compressing in-transport
-			// linux packages which are already compressed.
-			req.Header.Add("accept-encoding", "identity")
-
+		for _, req := range requests {
 			chunkResponse, err := rf.retryRequest(req)
 			if err != nil {
 				log.Errorf("Requesting chunk of %q: %v", url, err)
@@ -193,17 +178,45 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 			select {
 			case prevErr := <-errChan:
 				log.Errorf("Error writing chunk of %q:", prevErr)
+				return
 			case bodyChan <- chunkResponse.Body:
 			}
-
-			start = end + 1 // Server returns [start-end], both inclusive, so next request should start on end + 1.
 		}
 	}()
 
 	// Wait for the sending routine to finish and log the final error, if any.
-	if err, hasErr := <-errChan; hasErr {
-		log.Errorf("Error writing final chunk of %q:", err)
+	for err := range errChan {
+		log.Errorf("Error writing chunk of %q:", err)
 	}
+}
+
+func (rf *Refractor) split(url string, size int64) ([]*http.Request, error) {
+	// Build requests
+	var requests []*http.Request
+	start := int64(0)
+	for start < size {
+		end := start + int64(rf.ChunkSizeMiBs)<<20
+		if end > size {
+			end = size
+		}
+
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("building ranged retryRequest for %q: %v", url, err)
+		}
+
+		req.Header.Add("range", fmt.Sprintf("bytes=%d-%d", start, end))
+		// Prevent servers from gzipping request, as that would break ranges across servers.
+		// This actually does mirrors a favor, preventing them from spending CPU cycles on compressing in-transport
+		// linux packages which are already compressed.
+		req.Header.Add("accept-encoding", "identity")
+
+		requests = append(requests, req)
+
+		start = end + 1 // Server returns [start-end], both inclusive, so next request should start on end + 1.
+	}
+
+	return requests, nil
 }
 
 func (rf *Refractor) retryRequest(r *http.Request) (*http.Response, error) {
