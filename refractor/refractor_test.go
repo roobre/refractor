@@ -97,8 +97,12 @@ func Test_Refractor(t *testing.T) {
 	}
 
 	body, err := io.ReadAll(response.Body)
+	if len(body) != len(rubbish) {
+		t.Errorf("Received %d bytes of %d expected", len(body), len(rubbish))
+	}
+
 	if err != nil {
-		t.Fatalf("cannot read response body error: %v", err)
+		t.Fatalf("cannot read response body: %v", err)
 	}
 
 	if !bytes.Equal(body, rubbish) {
