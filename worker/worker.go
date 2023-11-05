@@ -16,7 +16,6 @@ import (
 var (
 	ErrSlowMirror    = errors.New("slow mirror")
 	ErrChannelClosed = errors.New("request channel closed")
-	ErrRequest       = errors.New("error performing request")
 	ErrCode          = errors.New("received non-ok status code")
 )
 
@@ -94,8 +93,9 @@ func (w Worker) Work(requests chan RequestResponse) error {
 			err,
 		}
 
+		// In addition to reporting the error to the channel, break request loop as we don't trust this mirror anymore.
 		if err != nil {
-			return ErrRequest
+			return err
 		}
 	}
 
