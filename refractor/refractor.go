@@ -207,15 +207,14 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (rf *Refractor) retryRequest(r *http.Request) (*http.Response, error) {
-	retries := rf.Retries
 	try := 0
 	for {
 		try++
 
 		response, err := rf.request(r)
 		if err != nil {
-			log.Errorf("[%d/%d] Requesting %s[%s]: %v", try, retries, r.URL.Path, r.Header.Get("range"), err)
-			if try < retries {
+			log.Errorf("[%d/%d] Requesting %s[%s]: %v", try, rf.Retries, r.URL.Path, r.Header.Get("range"), err)
+			if try < rf.Retries {
 				continue
 			}
 
