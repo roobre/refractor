@@ -7,8 +7,8 @@ import (
 // ReaderWrapper wraps an io.Reader and calls OnDone with the total number of bytes read from the underlying reader
 // as an argument.
 // OnDone is called at most once when the underlying reader returns the first error, that can be EOF, or when it get
-// Close()d.
-// If the underlying reader also implements io.Closer, ReaderWrapper.Close() will also call Close() on it. Otherwise,
+// Close()d, whatever happens first.
+// If the underlying reader also implements io.Closer, calling Close() will also call Close() on it. Otherwise,
 // the Close() operation always returns nil.
 type ReaderWrapper struct {
 	Underlying io.Reader
