@@ -32,7 +32,7 @@ type Config struct {
 func (c Config) WithDefaults() Config {
 	const (
 		defaultChunkSize    = 4
-		defaultChunkTimeout = 5 * time.Second
+		defaultChunkTimeout = 3 * time.Second
 		defaultRetries      = 5
 	)
 
@@ -71,8 +71,9 @@ type responseErr struct {
 func (rf *Refractor) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	url := r.URL.String()
 
-	// Archlinux hack: Mirrors return 404 for .db.sig files.
 	// TODO: Mirror-specific hacks should be a on a different, possibly config-driven object that wraps Refractor.
+
+	// Archlinux hack: Mirrors return 404 for .db.sig files.
 	if strings.HasSuffix(url, ".db.sig") {
 		rw.WriteHeader(http.StatusNotFound)
 		return
