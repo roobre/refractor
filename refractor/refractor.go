@@ -63,11 +63,6 @@ func New(c Config, pool *pool.Pool) *Refractor {
 	}
 }
 
-type responseErr struct {
-	err      error
-	response *http.Response
-}
-
 func (rf *Refractor) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	url := r.URL.String()
 
@@ -100,20 +95,22 @@ func (rf *Refractor) handlePlain(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	br := <-rf.retryRequest(req)
-	if br.err != nil {
+	response, err := rf.retryRequest(req)
+	if err != nil {
 		log.Errorf("GET request for %q failed: %v", url, err)
 		rw.WriteHeader(http.StatusBadGateway)
 		return
 	}
 
-	for k, vs := range br.response.Header {
+	defer response.Body.Close()
+
+	for k, vs := range response.Header {
 		for _, v := range vs {
 			rw.Header().Add(k, v)
 		}
 	}
 
-	_, err = io.Copy(rw, br.response.Body)
+	_, err = io.Copy(rw, response.Body)
 	if err != nil {
 		log.Errorf("writing GET body: %v", err)
 	}
@@ -129,113 +126,106 @@ func (rf *Refractor) handleRefracted(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	headReq.Header.Add("accept-encoding", "identity") // Prevent server from gzipping response.
-	br := <-rf.retryRequest(headReq)
-
-	var responseChannels []chan responseErr
-
-	size := br.response.ContentLength
-	start := int64(0)
-	for start < size {
-		end := start + int64(rf.ChunkSizeMiBs)<<20
-		if end > size {
-			end = size
-		}
-
-		req, err := http.NewRequest(http.MethodGet, url, nil)
-		if err != nil {
-			log.Errorf("building ranged retryRequest for %q: %v", url, err)
-			rw.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		req.Header.Add("range", fmt.Sprintf("bytes=%d-%d", start, end))
-		// Prevent servers from gzipping request, as that would break ranges across servers.
-		req.Header.Add("accept-encoding", "identity")
-		responseChannels = append(responseChannels, rf.retryRequest(req))
-
-		start = end + 1 // Server returns [start-end], both inclusive, so next request should start on end + 1.
+	headReq.Header.Add("accept-encoding", "identity") // Prevent server from gzipping headResponse.
+	headResponse, err := rf.retryRequest(headReq)
+	if err != nil {
+		log.Errorf("HEAD request to %s did not succeed: %v", url, err)
+		rw.WriteHeader(http.StatusBadGateway)
+		return
 	}
 
-	// Defer fully consuming and closing all response channels to avoid leaking buffers and workers, in the event an
-	// error occurs.
-	defer func() {
-		for _, rc := range responseChannels {
-			re := <-rc
-			if re.response != nil {
-				re.response.Body.Close()
-			}
-		}
-	}()
-
-	for k, vs := range br.response.Header {
+	for k, vs := range headResponse.Header {
 		for _, v := range vs {
 			rw.Header().Add(k, v)
 		}
 	}
 
-	written := int64(0)
-	for _, rc := range responseChannels {
-		re := <-rc
-		if re.err != nil {
-			log.Errorf("Reading resopnse from channel: %v", err)
-			rw.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		n, err := io.Copy(rw, re.response.Body)
-		if err != nil {
-			log.Errorf("Writing response chunk: %v", err)
-			rw.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		written += n
-
-		re.response.Body.Close()
-	}
-
-	if written != br.response.ContentLength {
-		log.Errorf("Wrote %d bytes of %d expected for %s", written, br.response.ContentLength, url)
-		return
-	}
-}
-
-func (rf *Refractor) retryRequest(r *http.Request) chan responseErr {
-	respChan := make(chan responseErr)
+	// This goroutine runs in parallel with the main request loop, writing bodies to the client and reporting back
+	// errors so the main loop can stop if an error occurs.
+	// This allows writing bytes to the client at the same time we are reading the next chunk.
+	bodyChan := make(chan io.ReadCloser)
+	errChan := make(chan error)
 	go func() {
-		defer close(respChan)
-
-		retries := rf.Retries
-		try := 0
-		for {
-			try++
-
-			response, err := rf.request(r)
+		for body := range bodyChan {
+			_, err := io.Copy(rw, body)
 			if err != nil {
-				log.Errorf("[%d/%d] Requesting %s[%s]: %v", try, retries, r.URL.Path, r.Header.Get("range"), err)
-				if try < retries {
-					continue
-				}
+				errChan <- err
+			}
+			// Always close body, even if an error occurred.
+			body.Close()
+		}
 
-				log.Errorf("Giving up on %s[%s]: %v", r.URL.Path, r.Header.Get("range"), err)
+		// Close errChan to signal the main loop when we're done.
+		close(errChan)
+	}()
 
-				respChan <- responseErr{
-					err: err,
-				}
+	// Run main loop as an anonymous function to preserve semantics of defer and early return.
+	func() {
+		defer close(bodyChan) // Ensure bodyChan is closed even if we return early.
 
+		size := headResponse.ContentLength
+		start := int64(0)
+		for start < size {
+			end := start + int64(rf.ChunkSizeMiBs)<<20
+			if end > size {
+				end = size
+			}
+
+			req, err := http.NewRequest(http.MethodGet, url, nil)
+			if err != nil {
+				log.Errorf("building ranged retryRequest for %q: %v", url, err)
+				rw.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			respChan <- responseErr{
-				response: response,
+			req.Header.Add("range", fmt.Sprintf("bytes=%d-%d", start, end))
+			// Prevent servers from gzipping request, as that would break ranges across servers.
+			// This actually does mirrors a favor, preventing them from spending CPU cycles on compressing in-transport
+			// linux packages which are already compressed.
+			req.Header.Add("accept-encoding", "identity")
+
+			chunkResponse, err := rf.retryRequest(req)
+			if err != nil {
+				log.Errorf("Requesting chunk of %q: %v", url, err)
+				return
 			}
 
-			return
+			select {
+			case prevErr := <-errChan:
+				log.Errorf("Error writing chunk of %q:", prevErr)
+			case bodyChan <- chunkResponse.Body:
+			}
+
+			start = end + 1 // Server returns [start-end], both inclusive, so next request should start on end + 1.
 		}
 	}()
 
-	return respChan
+	// Wait for the sending routine to finish and log the final error, if any.
+	if err, hasErr := <-errChan; hasErr {
+		log.Errorf("Error writing final chunk of %q:", err)
+	}
+}
+
+func (rf *Refractor) retryRequest(r *http.Request) (*http.Response, error) {
+	retries := rf.Retries
+	try := 0
+	for {
+		try++
+
+		response, err := rf.request(r)
+		if err != nil {
+			log.Errorf("[%d/%d] Requesting %s[%s]: %v", try, retries, r.URL.Path, r.Header.Get("range"), err)
+			if try < retries {
+				continue
+			}
+
+			log.Errorf("Giving up on %s[%s]: %v", r.URL.Path, r.Header.Get("range"), err)
+			return nil, err
+
+		}
+
+		return response, nil
+	}
 }
 
 func (rf *Refractor) request(r *http.Request) (*http.Response, error) {
@@ -274,7 +264,7 @@ func (rf *Refractor) request(r *http.Request) (*http.Response, error) {
 
 	body := response.Body
 
-	// Asynchronously wait for context and close body if copy takes too long.
+	// Asynchronously wait for context and close body if it gets cancelled.
 	go func() {
 		<-ctx.Done()
 
@@ -284,12 +274,12 @@ func (rf *Refractor) request(r *http.Request) (*http.Response, error) {
 		}
 	}()
 
+	// io.Copy will return early if the source body is cancelled above.
 	n, err := io.Copy(buf, body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check we read the expected length.
 	if n != response.ContentLength {
 		return nil, fmt.Errorf("expected to read bytes %d but read %d instead", response.ContentLength, n)
 	}
